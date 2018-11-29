@@ -9,7 +9,7 @@
 
 #define HOST_RX_ISR_FLAG (0x00005)
 #define HOST_RX_BUFFER 1
-#define END_OF_FRAME 0x40	//TODO: Change
+#define END_OF_FRAME (0x40)	//TODO: Change
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
@@ -22,6 +22,7 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
+
     if(huart->Instance == USART6)
     {
      osSignalSet(RxTaskHandle, HOST_RX_ISR_FLAG );
@@ -48,6 +49,8 @@ void StartRxTask(void const * argument)
 
      // Do whatever needs to be done to the new char that just arrived
         //....
+     	 WM_HWIN hItem = WM_GetDialogItem(hWin, (GUI_ID_USER + 0x07));
+     	 TEXT_SetText(hItem, tmp_char);
 
         // Be sure to set the interrupt for the next char
         if( HAL_UART_Receive_IT( &huart6, (huart6.pRxBuffPtr - huart6.RxXferSize), 1 ) != HAL_OK)
@@ -63,6 +66,7 @@ void StartTxTask(void const * argument)
 
      for(;;)
      {
+    	 /*
           evt = osMessageGet(TxTaskHandle, osWaitForever);
 
           if( evt.status == osEventMessage )
@@ -76,7 +80,10 @@ void StartTxTask(void const * argument)
                HAL_UART_Transmit_DMA( &huart6, (uint8_t*)tx_buffer, msg->msg_len );
                osPoolFree( message_pool, msg );
           }
-
+		*/
+    	 uint8_t echo = 'A';
+    	 HAL_UART_Transmit_IT(&huart6,&echo, 1);
+    	 osDelay(500);
      }
 }
 

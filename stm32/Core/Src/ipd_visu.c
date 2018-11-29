@@ -14,6 +14,12 @@ TS_StateTypeDef  TS_State;
 state_t currState;
 uint8_t currServoState;
 
+/* Helper for display text from UART */
+void dispText()
+{
+
+}
+
 /* StartStatemaschineTask function */
 void StartStatemaschineTask(void const * argument)
 {
@@ -143,8 +149,8 @@ void StartCommTask(void const * argument)
   /* Infinite loop */
   for(;;)
   {
-	  // uint8_t echo = 'A';
-	  //HAL_UART_Transmit_IT(&huart6,&echo, 1);
+	  WM_HWIN hItem = WM_GetDialogItem(hWin, (GUI_ID_USER + 0x06));
+	  TEXT_SetText(hItem, "x: 25");
 	  osDelay(1);
   }
   /* USER CODE END StartCommTask */

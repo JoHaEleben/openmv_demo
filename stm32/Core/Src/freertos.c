@@ -130,7 +130,7 @@ void MX_FREERTOS_Init(void) {
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
   /* definition and creation of STemWinTask */
-  osThreadDef(STemWinTask, StartSTemWinTask, osPriorityNormal, 0, 512);
+  osThreadDef(STemWinTask, StartSTemWinTask, osPriorityBelowNormal, 0, 512);
   STemWinTaskHandle = osThreadCreate(osThread(STemWinTask), NULL);
 
   /* definition and creation of touchTask */

@@ -17,6 +17,9 @@
 #include "usart.h"
 #include "cmsis_os.h"
 #include "ipd_visu.h"
+#include "GUI.h" //STEmWin
+#include "WM.h" //STEmWin
+#include "DIALOG.h"
 
 extern osMessageQId funcCmdQueueHandle;
 extern osMessageQId txQueueHandle;

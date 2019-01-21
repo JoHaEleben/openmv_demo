@@ -27,8 +27,9 @@
 #define SERVO_TILT_CH		(&htim3)
 #define SERVO_LOW_LIMIT 	(105)		// lower limit for pulse width
 #define SERVO_HIGH_LIMIT 	(200)		// upper limit for pulse width
-#define SERVO_READY			(1)
-#define SERVO_DISABLED		(0)
+#define SERVO_MIDDLE		(SERVO_LOW_LIMIT+((SERVO_HIGH_LIMIT-SERVO_LOW_LIMIT)/2))
+#define SERVO_SPEED_FACT	(5)
+#define SERVO_TRACK_ERROR	(10)
 
 void servo_init(uint8_t servo);
 void servo_deinit(uint8_t servo);

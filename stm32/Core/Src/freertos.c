@@ -169,12 +169,12 @@ void MX_FREERTOS_Init(void) {
 
   /* definition and creation of txQueue */
 /* what about the sizeof here??? cd native code */
-  osMessageQDef(txQueue, 100, uint8_t);
+  osMessageQDef(txQueue, 1000, uint8_t);
   txQueueHandle = osMessageCreate(osMessageQ(txQueue), NULL);
 
   /* definition and creation of rxQueue */
 /* what about the sizeof here??? cd native code */
-  osMessageQDef(rxQueue, 100, uint8_t);
+  osMessageQDef(rxQueue, 1000, uint8_t);
   rxQueueHandle = osMessageCreate(osMessageQ(rxQueue), NULL);
 
   /* definition and creation of servoCmdQueue */

@@ -7,12 +7,17 @@
 
 #include "ipd_visu.h"
 #include "ipd_servo.h"
+#include "ipd_comm.h"
+#include "fifofast.h"
 
 WM_HWIN hWin;
 WM_HWIN CreateMainWindow(void);
 TS_StateTypeDef  TS_State;
 state_t currState;
 uint8_t currServoState;
+
+uint8_t str[MAX_STR_SIZE];
+uint8_t x_pos = 0, y_pos = 0;
 
 /* Helper for display text from UART */
 void dispText()
@@ -25,7 +30,7 @@ void StartStatemaschineTask(void const * argument)
 {
   /* USER CODE BEGIN StartStatemaschineTask */
 	currState = STATE_INITIAL;
-	currServoState = SERVO_DISABLED;
+	currServoState = SERVOSTATE_DISABLED;
   /* Infinite loop */
   for(;;)
   {
@@ -38,42 +43,45 @@ void StartStatemaschineTask(void const * argument)
 	  }
 
 	  // disable servo tracking
-	  if (currMsg == MSG_SERVO && currServoState == SERVO_READY)
+	  if ((currMsg == MSG_SERVO) && (currServoState != SERVOSTATE_DISABLED))
 	  {
-		  servo_deinit(SERVO_PAN);
-		  servo_deinit(SERVO_TILT);
-		  currServoState = SERVO_DISABLED;
+		  currServoState = SERVOSTATE_DISABLED;
+	  }
+	  // disable servo tracking
+	  if ((currMsg == MSG_SERVO) && (currServoState == SERVOSTATE_DISABLED))
+	  {
+		  currServoState = SERVOSTATE_INIT;
 	  }
 	  // state machine
 	  switch(currState){
 	  case STATE_INITIAL:
-		  if (currMsg == MSG_START)
-		  {
+		  	  //TODO: Init something ...
 			  currState = STATE_WAITING;
-		  }
-		  if (currMsg == MSG_SERVO)
-		  {
-		 	  currState = STATE_SERVO_INIT;
-		  }
 		  break;
 	  case STATE_WAITING:
-		  if (currMsg == MSG_SERVO)
+		  if (currMsg == MSG_FACE)
 		  {
-			  currState = STATE_SERVO_INIT;
+			  currState = STATE_FACE;
 		  }
 		  break;
 	  case STATE_COLOR:
 		  break;
-	  case STATE_SERVO_INIT:
-		  if (currServoState != SERVO_READY)
-		  {
-			 servo_writeDEG(SERVO_PAN,90);
-			 servo_writeDEG(SERVO_TILT,0);
-			 currServoState = SERVO_READY;
-		  }
-		  currState = STATE_WAITING;
-		  break;
 	  case STATE_FACE:
+		  if (currMsg == MSG_START)
+		  {
+			  osMessagePut(txQueueHandle, (uint32_t) 0xFE, osWaitForever);
+			  osMessagePut(txQueueHandle, (uint32_t) 0xFE, osWaitForever);
+			  osMessagePut(txQueueHandle, (uint32_t) 0xAA, osWaitForever);
+			  osMessagePut(txQueueHandle, (uint32_t) 0xAA, osWaitForever);
+
+		  }
+		  if (currMsg == MSG_STOP)
+		  {
+			  // TODO: Stop CAM remotely
+			  osMessagePut(txQueueHandle, (uint32_t) 0xAB, osWaitForever);
+			  osMessagePut(txQueueHandle, (uint32_t) 0xAB, osWaitForever);
+			  currState = STATE_WAITING;
+		  }
 		  break;
 	  case STATE_CODE:
 		  break;
@@ -100,9 +108,30 @@ void StartSTemWinTask(void const * argument)
 
 	hWin = CreateMainWindow();
 
+	// additional info text
+	WM_HWIN hItemYVal = WM_GetDialogItem(hWin, (GUI_ID_USER + 0x05));
+	WM_HWIN hItemXVal = WM_GetDialogItem(hWin, (GUI_ID_USER + 0x06));
+	WM_HWIN hItemInfo = WM_GetDialogItem(hWin, (GUI_ID_USER + 0x07));
+
   /* Infinite loop */
   for(;;)
   {
+	  /*
+	  if (currServoState == SERVOSTATE_INIT)
+	  {
+		  TEXT_SetText(hItemInfo, "INIT");
+	  }
+	  if (currServoState == SERVOSTATE_READY)
+	  	  {
+	  		  TEXT_SetText(hItemInfo, "READY");
+	  	  }
+	  if (currServoState == SERVOSTATE_DISABLED)
+	  	  {
+	  		  TEXT_SetText(hItemInfo, "DISAB");
+	  	  }
+	  */
+	TEXT_SetText(hItemInfo, &str);
+	WM_Update(hWin);
     GUI_Delay(500);
     osDelay(1);
   }
@@ -145,13 +174,83 @@ void StartTouchTask(void const * argument)
 void StartCommTask(void const * argument)
 {
   /* USER CODE BEGIN StartCommTask */
+	uint8_t rx_byte = '0';
+	uint8_t i = 0;
+	uint8_t yPosStr[6] = "X:000", xPosStr[6] = "Y:000";
+	//uint8_t str[MAX_STR_SIZE];
+	str[0] = '\0';
 
   /* Infinite loop */
-  for(;;)
-  {
-	  WM_HWIN hItem = WM_GetDialogItem(hWin, (GUI_ID_USER + 0x06));
-	  TEXT_SetText(hItem, "x: 25");
-	  osDelay(1);
-  }
+	for (;;)
+	{
+		// new char from UART
+		osEvent msg = osMessageGet(rxQueueHandle, osWaitForever);
+		if (msg.status == osEventMessage)
+		{
+			rx_byte = (uint8_t) msg.value.v;
+			// write to char array
+			str[i] = rx_byte;
+			i++;
+			// LF or CR
+			if (rx_byte == CHAR_CR || rx_byte == CHAR_LF )
+			{
+				str[i-1] = '\0';
+				i = 0;
+				//WM_HWIN hItem = WM_GetDialogItem(hWin, (GUI_ID_USER + 0x07));
+				//TEXT_SetText(hItem, &str);
+			}
+			// overflow
+			if (i > MAX_STR_SIZE - 2)
+			{
+				str[0] = '\0';
+				i = 0;
+			}
+		}
+
+
+
+		// search position data
+		for (uint8_t idx = 0; idx < MAX_STR_SIZE; idx++)
+		{
+			// end of data
+			if (str[idx] == '\0')
+			{
+				break;
+			}
+			// pos data: X:000
+			if (str[idx] == 'X')
+			{
+				for(uint8_t cpIdx = 0; cpIdx<= 4; cpIdx++)
+				{
+					xPosStr[cpIdx] = str[idx+cpIdx];
+				}
+				WM_HWIN hItemXVal = WM_GetDialogItem(hWin, (GUI_ID_USER + 0x06));
+				TEXT_SetText(hItemXVal, &xPosStr);
+				// numeric position
+				x_pos = 0;
+				x_pos += (xPosStr[2] - 0x30) * 100;
+				x_pos += (xPosStr[3] - 0x30) * 10;
+				x_pos += (xPosStr[4] - 0x30) * 1;
+
+			}
+			// pos data: Y:000
+			if (str[idx] == 'Y')
+			{
+				for (uint8_t cpIdx = 0; cpIdx <= 4; cpIdx++)
+				{
+					yPosStr[cpIdx] = str[idx + cpIdx];
+				}
+				WM_HWIN hItemXVal = WM_GetDialogItem(hWin,(GUI_ID_USER + 0x05));
+				TEXT_SetText(hItemXVal, &yPosStr);
+				// numeric position
+				y_pos = 0;
+				y_pos += (yPosStr[2] - 0x30) * 100;
+				y_pos += (yPosStr[3] - 0x30) * 10;
+				y_pos += (yPosStr[4] - 0x30) * 1;
+
+			}
+		}
+		osDelay(1);
+	}
   /* USER CODE END StartCommTask */
 }

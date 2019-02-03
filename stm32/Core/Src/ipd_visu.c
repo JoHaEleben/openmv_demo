@@ -20,9 +20,10 @@ uint8_t str[MAX_STR_SIZE];
 uint8_t x_pos = 0, y_pos = 0;
 
 /* Helper for display text from UART */
-void dispText()
+void dispText(const uint8_t * s)
 {
-
+	WM_HWIN hItem = WM_GetDialogItem(hWin, (GUI_ID_USER + 0x07));
+	TEXT_SetText(hItem, (const char *) s);
 }
 
 /* StartStatemaschineTask function */
@@ -63,10 +64,32 @@ void StartStatemaschineTask(void const * argument)
 		  {
 			  currState = STATE_FACE;
 		  }
+		  if (currMsg == MSG_COLOR)
+		  {
+			  currState = STATE_COLOR;
+		  }
+		  if (currMsg == MSG_CODE)
+		  {
+			  currState = STATE_CODE;
+		  }
 		  break;
-	  case STATE_COLOR:
-		  break;
-	  case STATE_FACE:
+		case STATE_COLOR:
+			if (currMsg == MSG_START)
+			{
+				osMessagePut(txQueueHandle, (uint32_t) 0xFF, osWaitForever);
+				osMessagePut(txQueueHandle, (uint32_t) 0xFF, osWaitForever);
+				osMessagePut(txQueueHandle, (uint32_t) 0xAA, osWaitForever);
+				osMessagePut(txQueueHandle, (uint32_t) 0xAA, osWaitForever);
+
+			}
+			if (currMsg == MSG_STOP)
+			{
+				osMessagePut(txQueueHandle, (uint32_t) 0xAB, osWaitForever);
+				osMessagePut(txQueueHandle, (uint32_t) 0xAB, osWaitForever);
+				currState = STATE_WAITING;
+			}
+			break;
+		case STATE_FACE:
 		  if (currMsg == MSG_START)
 		  {
 			  osMessagePut(txQueueHandle, (uint32_t) 0xFE, osWaitForever);
@@ -77,13 +100,28 @@ void StartStatemaschineTask(void const * argument)
 		  }
 		  if (currMsg == MSG_STOP)
 		  {
-			  // TODO: Stop CAM remotely
 			  osMessagePut(txQueueHandle, (uint32_t) 0xAB, osWaitForever);
 			  osMessagePut(txQueueHandle, (uint32_t) 0xAB, osWaitForever);
 			  currState = STATE_WAITING;
 		  }
 		  break;
 	  case STATE_CODE:
+		  if (currMsg == MSG_START)
+		  {
+			  osMessagePut(txQueueHandle, (uint32_t) 0xFD, osWaitForever);
+			  osMessagePut(txQueueHandle, (uint32_t) 0xFD, osWaitForever);
+			  osMessagePut(txQueueHandle, (uint32_t) 0xAA, osWaitForever);
+			  osMessagePut(txQueueHandle, (uint32_t) 0xAA, osWaitForever);
+		  }
+		  if (currMsg == MSG_STOP)
+		  {
+			  osMessagePut(txQueueHandle, (uint32_t) 0xAB, osWaitForever);
+			  osMessagePut(txQueueHandle, (uint32_t) 0xAB, osWaitForever);
+			  currState = STATE_WAITING;
+		  }
+		  // display incoming string
+		  //dispText((uint8_t *)&str);
+
 		  break;
 	  default:
 		  Error_Handler();
@@ -108,33 +146,25 @@ void StartSTemWinTask(void const * argument)
 
 	hWin = CreateMainWindow();
 
-	// additional info text
-	WM_HWIN hItemYVal = WM_GetDialogItem(hWin, (GUI_ID_USER + 0x05));
-	WM_HWIN hItemXVal = WM_GetDialogItem(hWin, (GUI_ID_USER + 0x06));
+	// get item IDs
 	WM_HWIN hItemInfo = WM_GetDialogItem(hWin, (GUI_ID_USER + 0x07));
 
   /* Infinite loop */
-  for(;;)
-  {
-	  /*
-	  if (currServoState == SERVOSTATE_INIT)
-	  {
-		  TEXT_SetText(hItemInfo, "INIT");
-	  }
-	  if (currServoState == SERVOSTATE_READY)
-	  	  {
-	  		  TEXT_SetText(hItemInfo, "READY");
-	  	  }
-	  if (currServoState == SERVOSTATE_DISABLED)
-	  	  {
-	  		  TEXT_SetText(hItemInfo, "DISAB");
-	  	  }
-	  */
-	TEXT_SetText(hItemInfo, &str);
-	WM_Update(hWin);
-    GUI_Delay(500);
-    osDelay(1);
-  }
+	for (;;)
+	{
+		// display string
+		TEXT_SetText(hItemInfo, (const char *)&str);
+
+		// force update graph
+		WM_HWIN hItemGraph = WM_GetDialogItem(hWin, (GUI_ID_USER + 0x09));
+		WM_Invalidate(hItemGraph);
+
+		// Update GUI
+		WM_Update(hWin);
+		GUI_Delay(500);
+
+		osDelay(1);
+	}
   /* USER CODE END StartSTemWinTask */
 }
 
@@ -177,7 +207,6 @@ void StartCommTask(void const * argument)
 	uint8_t rx_byte = '0';
 	uint8_t i = 0;
 	uint8_t yPosStr[6] = "X:000", xPosStr[6] = "Y:000";
-	//uint8_t str[MAX_STR_SIZE];
 	str[0] = '\0';
 
   /* Infinite loop */

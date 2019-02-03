@@ -50,13 +50,8 @@ void StartRxTask(void const * argument)
 		osSignalWait( HOST_RX_ISR_FLAG, osWaitForever);
 		// read single byte from UART
 		tmp_char = *(huart6.pRxBuffPtr - huart6.RxXferSize);
-
 		// write to Queue
 		osMessagePut(rxQueueHandle, (uint32_t) tmp_char, osWaitForever);
-
-		// write on LCD (Test)
-		//WM_HWIN hItem = WM_GetDialogItem(hWin, (GUI_ID_USER + 0x07));
-		//TEXT_SetText(hItem, &tmp_char);
 
 		// Be sure to set the interrupt for the next char
 		if (HAL_UART_Receive_IT(&huart6, (huart6.pRxBuffPtr - huart6.RxXferSize), 1) != HAL_OK)
@@ -70,38 +65,21 @@ void StartTxTask(void const * argument)
 {
 	uint8_t tx_byte = 0;
 	osEvent msg;
+	for (;;)
+	{
+		osSemaphoreWait(txSemaHandle, osWaitForever);
+		msg = osMessageGet(txQueueHandle, osWaitForever);
+		if (msg.status == osEventMessage)
+		{
+			tx_byte = (uint8_t) msg.value.v;
 
-     for(;;)
-     {
-    	 osSemaphoreWait(txSemaHandle, osWaitForever);
-    	 msg = osMessageGet(txQueueHandle, osWaitForever);
-    	 if (msg.status == osEventMessage)
-    	 {
-    		 tx_byte = (uint8_t) msg.value.v;
-
-    		 if (HAL_UART_Transmit_IT(&huart6, &tx_byte, 1) != HAL_OK)
-    		 {
-    			 Error_Handler();
-    		 }
-    	 }
-
-
-    	 /*
-               // Take binary semaphore for UART
-               osSemaphoreWait(txSemaHandle, osWaitForever);
-               memcpy( (void*)&tx_buffer[4], (void*)msg->buffer, msg->msg_len );
-               tx_buffer[msg->msg_len++] = END_OF_FRAME;
-               HAL_UART_Transmit_DMA( &huart6, (uint8_t*)tx_buffer, msg->msg_len );
-               osPoolFree( message_pool, msg );
-          }
-
-    	 uint8_t echo = 'A';
-    	 HAL_UART_Transmit_IT(&huart6,&echo, 1);
-    	 osDelay(500);
-    	 */
-
-    	 osDelay(1);
-     }
+			if (HAL_UART_Transmit_IT(&huart6, &tx_byte, 1) != HAL_OK)
+			{
+				Error_Handler();
+			}
+		}
+		osDelay(1);
+	}
 }
 
 

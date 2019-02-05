@@ -1,6 +1,6 @@
 # Image Processing Routines
 #
-# (C) Johannes Hantsch 2018
+# (C) Johannes Hantsch 2019
 #
 
 import sensor, image, time, struct, pyb, utime
@@ -19,20 +19,7 @@ def facetrack_camInit():
     sensor.set_pixformat(sensor.GRAYSCALE)
     sensor.skip_frames(time = 2000)
 
-# global data
-x_pos = 1800 # default
-y_pos = 1500 # default
-
-x_min = 1400
-x_max = 2200
-y_max = 1900
-y_min = 1100
-
-x_gain = +1.00
-y_gain = +1.00
-
-# Load Haar Cascade
-# By default this will use all stages, lower satges is faster but less accurate.
+# Load Cascade
 face_cascade = image.HaarCascade("frontalface", stages=25)
 
 # First set of keypoints
@@ -91,29 +78,6 @@ def facetrack_run():
 
             x = c[0]
             y = c[1]
-
-            x_error = x - (img.width()/2)
-            y_error = y - (img.height()/2)
-
-            x_pos += x_error * x_gain
-            y_pos += y_error * y_gain
-
-            # Clamp output between min and max
-            if (x_pos > x_max):
-                x_pos = x_max
-            if (x_pos < x_min):
-                x_pos = x_min
-
-            # Clamp output between min and max
-            if (y_pos > y_max):
-                y_pos = y_max
-            if (y_pos < y_min):
-                y_pos = y_min
-
-            # y_pos and x_pos --> to servo
-
-    # Draw FPS
-    img.draw_string(0, 0, "FPS:%.2f"%(clock.fps()))
     utime.sleep_ms(300)
 
 # COLOR TRACK #################################################################
@@ -143,8 +107,8 @@ def colortrack_run():
     global x
     global y
 
-    x = 100
-    y = 100
+    x = 333
+    y = 333
 
     clock.tick()
     img = sensor.snapshot()
@@ -179,7 +143,34 @@ def codereader_run():
         img.draw_rectangle(code.rect(), color = (255, 0, 0))
         payload = code.payload();
         print(code)
-    print(clock.fps())
 
+# TRACK CIRCLE #################################################################
 
+def circletrack_camInit():
+    global clock
 
+    sensor.reset()
+    #sensor.set_pixformat(sensor.RGB565) # grayscale is faster
+
+    sensor.set_pixformat(sensor.GRAYSCALE)
+    sensor.set_framesize(sensor.QVGA)
+    sensor.set_windowing((200, 200))
+    sensor.skip_frames(time = 2000)
+    clock = time.clock()
+
+def circletrack_run():
+    global clock
+    global x
+    global y
+
+    x = 333
+    y = 333
+
+    img = sensor.snapshot().lens_corr(1.8)
+
+    for c in img.find_circles(threshold = 3500, x_margin = 10, y_margin = 10, r_margin = 10,
+            r_min = 2, r_max = 100, r_step = 2):
+        img.draw_circle(c.x(), c.y(), c.r(), color = (255, 0, 0))
+
+        x = c.x()
+        y = c.y()

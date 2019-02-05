@@ -26,6 +26,7 @@ typedef enum { MSG_NONE = 0, MSG_START, MSG_STOP, MSG_DISABLE, MSG_COLOR, MSG_FA
 
 extern state_t currState;
 extern uint8_t x_pos, y_pos;
+extern uint8_t xVisuPos, yVisuPos;
 extern uint8_t currServoState;
 extern WM_HWIN hWin;
 extern osMessageQId funcCmdQueueHandle;

@@ -19,13 +19,12 @@
 */
 
 // USER START (Optionally insert additional includes)
-// USER END
-
-#include "DIALOG.h"
 #include "ipd_visu.h"
 #include "stdint.h"
 #include "ipd_servo.h"
+// USER END
 
+#include "DIALOG.h"
 
 /*********************************************************************
 *
@@ -33,15 +32,17 @@
 *
 **********************************************************************
 */
-#define ID_FRAMEWIN_0            (GUI_ID_USER + 0x00)
-#define ID_CHECKBOX_0            (GUI_ID_USER + 0x01)
-#define ID_BUTTON_0            (GUI_ID_USER + 0x02)
-#define ID_BUTTON_1            (GUI_ID_USER + 0x03)
-#define ID_RADIO_0            (GUI_ID_USER + 0x04)
-#define ID_TEXT_0            (GUI_ID_USER + 0x05)
-#define ID_TEXT_1            (GUI_ID_USER + 0x06)
-#define ID_TEXT_2            (GUI_ID_USER + 0x07)
-#define ID_GRAPH_0            (GUI_ID_USER + 0x09)
+#define ID_FRAMEWIN_0    (GUI_ID_USER + 0x00)
+#define ID_CHECKBOX_0    (GUI_ID_USER + 0x01)
+#define ID_BUTTON_0    (GUI_ID_USER + 0x02)
+#define ID_BUTTON_1    (GUI_ID_USER + 0x03)
+#define ID_RADIO_0    (GUI_ID_USER + 0x04)
+#define ID_TEXT_0    (GUI_ID_USER + 0x05)
+#define ID_TEXT_1    (GUI_ID_USER + 0x06)
+#define ID_TEXT_2    (GUI_ID_USER + 0x07)
+#define ID_GRAPH_0    (GUI_ID_USER + 0x08)
+#define ID_TEXT_3    (GUI_ID_USER + 0x09)
+#define ID_TEXT_4    (GUI_ID_USER + 0x0A)
 
 
 // USER START (Optionally insert additional defines)
@@ -72,7 +73,9 @@ static const GUI_WIDGET_CREATE_INFO _aDialogCreate[] = {
   { TEXT_CreateIndirect, "txt_val1", ID_TEXT_0, 342, 120, 49, 20, 0, 0x64, 0 },
   { TEXT_CreateIndirect, "txt_val2", ID_TEXT_1, 260, 120, 69, 26, 0, 0x64, 0 },
   { TEXT_CreateIndirect, "txt_info", ID_TEXT_2, 260, 95, 127, 20, 0, 0x64, 0 },
-  { GRAPH_CreateIndirect, "gra_values", ID_GRAPH_0, 5, 5, 200, 200, 0, 0x0, 0 },
+  { GRAPH_CreateIndirect, "gra_values", ID_GRAPH_0, 25, 5, 210, 210, 0, 0x0, 0 },
+  { TEXT_CreateIndirect, "txt_serv1", ID_TEXT_3, 11, 227, 100, 19, 0, 0x64, 0 },
+  { TEXT_CreateIndirect, "txt_serv2", ID_TEXT_4, 117, 227, 100, 20, 0, 0x64, 0 },
   // USER START (Optionally insert additional widgets)
   // USER END
 };
@@ -90,11 +93,11 @@ static const GUI_WIDGET_CREATE_INFO _aDialogCreate[] = {
 *
 *   	_DrawCursor (little fancy marker)
 */
-static void _DrawCursor(int xOrg, int yOrg) {
+static void _DrawCursor(int xOrg, int yOrg, GUI_COLOR color) {
   int i;
   int x0, x1;
   int y0, y1;
-  GUI_SetColor(GUI_RED);
+  GUI_SetColor(color);
   for (i = 0; i < 5; i++) {
 	x0 = xOrg + _Cursor[i].x;
 	y0 = yOrg + _Cursor[i].y;
@@ -114,7 +117,9 @@ static void _cbGraph(WM_MESSAGE * pMsg) {
 	// Draw the GRAPH with the default settings
 	GRAPH_Callback(pMsg);
 	// draw position data as marker
-	_DrawCursor(x_pos, y_pos);
+	_DrawCursor(100, 100, GUI_WHITE);
+	//_DrawCursor(xVisuPos, yVisuPos, GUI_RED);
+	_DrawCursor(x_pos, y_pos, GUI_RED);
 	break;
   default:
 	// Handle all other messages by the default callback
@@ -190,6 +195,18 @@ static void _cbDialog(WM_MESSAGE * pMsg) {
     //
     hItem = WM_GetDialogItem(pMsg->hWin, ID_TEXT_2);
     TEXT_SetText(hItem, "> no information available");
+    //
+    // Initialization of 'txt_serv1'
+    //
+    hItem = WM_GetDialogItem(pMsg->hWin, ID_TEXT_3);
+    TEXT_SetText(hItem, "PAN: ??? DEG");
+    TEXT_SetFont(hItem, GUI_FONT_16_1);
+    //
+    // Initialization of 'txt_serv2'
+    //
+    hItem = WM_GetDialogItem(pMsg->hWin, ID_TEXT_4);
+    TEXT_SetText(hItem, "TILT: ??? DEG");
+    TEXT_SetFont(hItem, GUI_FONT_16_1);
     // USER START (Optionally insert additional code for further widget initialization)
     //
     // Initialization of 'txt_info'
@@ -200,10 +217,10 @@ static void _cbDialog(WM_MESSAGE * pMsg) {
     GRAPH_SetGridVis(hItem, 1);
     GRAPH_SetGridDistX(hItem, 10);
     GRAPH_SetGridDistY(hItem, 10);
-//    GRAPH_SetColor(hItem,GUI_LIGHTGRAY,GRAPH_CI_GRID);
-//    GRAPH_SetColor(hItem,GUI_WHITE,GRAPH_CI_BK);
-//    GRAPH_SetColor(hItem,GUI_BLACK,GRAPH_CI_BORDER);
-//    GRAPH_SetColor(hItem,GUI_DARKGRAY,GRAPH_CI_FRAME);
+    GRAPH_SetAutoScrollbar(hItem,GUI_COORD_X,0);
+    GRAPH_SetAutoScrollbar(hItem,GUI_COORD_Y,0);
+    GRAPH_SetVSizeX(hItem,200);
+    GRAPH_SetVSizeY(hItem,200);
     // custom callback for marker
     WM_SetCallback(hItem, _cbGraph);
 
@@ -221,12 +238,12 @@ static void _cbDialog(WM_MESSAGE * pMsg) {
         break;
       case WM_NOTIFICATION_RELEASED:
         // USER START (Optionally insert code for reacting on notification message)
+    	  // Sending MSG to StateMachine
+    	  osMessagePut(funcCmdQueueHandle, (uint32_t) MSG_SERVO, osWaitForever);
         // USER END
         break;
       case WM_NOTIFICATION_VALUE_CHANGED:
         // USER START (Optionally insert code for reacting on notification message)
-    	  // Sending MSG to StateMachine
-    	  osMessagePut(funcCmdQueueHandle, (uint32_t) MSG_SERVO, osWaitForever);
         // USER END
         break;
       // USER START (Optionally insert additional code for further notification handling)

@@ -9,6 +9,9 @@
 #include "ipd_visu.h"
 #include "utils.h"
 
+uint32_t driveX, driveY;
+uint8_t driveAngleTilt, driveAnglePan;
+
 int32_t improved_map(int32_t value, int32_t minIn, int32_t maxIn, int32_t minOut, int32_t maxOut)
 {
     const int32_t rangeIn = maxIn - minIn;
@@ -46,10 +49,16 @@ void servo_deinit(uint8_t servo)
 
 void servo_writeMS (uint8_t servo, uint8_t value)
 {
-	if (value > SERVO_HIGH_LIMIT || value < SERVO_LOW_LIMIT)
+	if (value < SERVO_PAN_0DEG_DC || value > SERVO_PAN_180DEG_DC)
 	{
 		_Error_Handler(__FILE__, __LINE__);
 	}
+	/*
+	if (servo == SERVO_TILT && value < SERVO_TILT_MAXDEG_DC)
+	{
+			_Error_Handler(__FILE__, __LINE__);
+	}
+	*/
 	TIM_OC_InitTypeDef sConfigOC;
 	sConfigOC.OCMode = TIM_OCMODE_PWM1;
 	sConfigOC.Pulse = value;
@@ -57,16 +66,15 @@ void servo_writeMS (uint8_t servo, uint8_t value)
 	sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
 	if (servo == SERVO_PAN)
 	{
-		if (HAL_TIM_PWM_ConfigChannel(SERVO_PAN_CH, &sConfigOC, TIM_CHANNEL_1)
-				!= HAL_OK)
+		if (HAL_TIM_PWM_ConfigChannel(SERVO_PAN_CH, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
 		{
 			_Error_Handler(__FILE__, __LINE__);
 		}
 		HAL_TIM_PWM_Start(SERVO_PAN_CH, TIM_CHANNEL_1);
 	}
-	else if (servo == SERVO_TILT) {
-		if (HAL_TIM_PWM_ConfigChannel(SERVO_TILT_CH, &sConfigOC, TIM_CHANNEL_1)
-				!= HAL_OK)
+	else if (servo == SERVO_TILT)
+	{
+		if (HAL_TIM_PWM_ConfigChannel(SERVO_TILT_CH, &sConfigOC, TIM_CHANNEL_1)!= HAL_OK)
 		{
 			_Error_Handler(__FILE__, __LINE__);
 		}
@@ -78,11 +86,24 @@ void servo_writeMS (uint8_t servo, uint8_t value)
 	}
 }
 
-void servo_writeDEG (uint8_t servo, uint8_t value)
+void servo_writeDEG (uint8_t servo, uint8_t deg)
 {
-	value = constrain(value, 0, 180);
-	value = (uint8_t) improved_map(value, 0, 180, SERVO_LOW_LIMIT, SERVO_HIGH_LIMIT);
-	servo_writeMS(servo, value);
+	// limit mechanical (only tilt)
+	if (servo == SERVO_TILT && deg >= SERVO_TILT_MAX_DEG)
+	{
+		deg = SERVO_MAX_DEG;
+	}
+	// limit for functional reasons
+	if (deg >= SERVO_MAX_DEG)
+	{
+		deg = SERVO_MAX_DEG;
+	}
+	if (deg <= SERVO_MIN_DEG)
+	{
+		deg = SERVO_MIN_DEG;
+	}
+	uint8_t dutycycle = improved_map(deg,0,180,SERVO_PAN_0DEG_DC,SERVO_PAN_180DEG_DC);
+	servo_writeMS(servo, dutycycle);
 }
 
 uint8_t servo_posFilter(const uint8_t n, const uint8_t in, const uint8_t disabled)
@@ -120,54 +141,64 @@ uint8_t servo_posFilter(const uint8_t n, const uint8_t in, const uint8_t disable
 void StartServoTask(void const * argument)
 {
   /* USER CODE BEGIN StartServoTask */
-	 uint32_t driveX, driveY;
-	 uint32_t actX, actY;
+
   /* Infinite loop */
   for(;;)
   {
 	  switch(currServoState){
 	  case SERVOSTATE_DISABLED:
 		  servo_deinit(SERVO_TILT);
-		  servo_deinit(SERVO_PAN);
+		  servo_deinit(SERVO_TILT);
 		  break;
 
 	  case SERVOSTATE_INIT:
-		  actX = SERVO_MIDDLE;
-		  actY = SERVO_LOW_LIMIT;
-		  servo_writeMS(SERVO_TILT, actY);
-		  servo_writeMS(SERVO_PAN, actX);
+		  driveAngleTilt = 90;
+		  driveAnglePan = 90;
+		  servo_writeDEG(SERVO_TILT,driveAngleTilt);
+		  servo_writeDEG(SERVO_PAN,driveAnglePan);
 		  currServoState = SERVOSTATE_READY;
 		  break;
 
 	  case SERVOSTATE_READY:
-		  driveX = improved_map(servo_posFilter(10,x_pos,1), 0, 300,SERVO_LOW_LIMIT,SERVO_HIGH_LIMIT);
-		  driveY = improved_map(servo_posFilter(10,y_pos,1), 0, 300,SERVO_LOW_LIMIT,SERVO_HIGH_LIMIT);
-		  if (driveX > actX)
-			  actX += SERVO_SPEED_FACT;
-		  else
-			  actX -= SERVO_SPEED_FACT;
-		  if (driveY > actY)
-			  actY += SERVO_SPEED_FACT;
-		  else
-			  actY -= SERVO_SPEED_FACT;
-
-		  /*
-		  actX = x_pos;
-		  actY = y_pos;
-		  */
-
-		  if (actX > SERVO_HIGH_LIMIT)
-				actX = SERVO_HIGH_LIMIT;
-		  if (actY > SERVO_HIGH_LIMIT)
-			  actY = SERVO_HIGH_LIMIT;
-
-		  if (actX < SERVO_LOW_LIMIT)
-			  actX = SERVO_LOW_LIMIT;
-		  if (actY < SERVO_LOW_LIMIT)
-			  actY = SERVO_LOW_LIMIT;
-
-			servo_writeMS(SERVO_TILT, actY);
-		  servo_writeMS(SERVO_PAN, actX);
+		  // here comes the tracking ...
+		  // X --> PAN *******************************************
+		  if (x_pos < (IMG_CENTER_X - IMG_CENTER_ERROR))
+		  {
+			  driveAnglePan += SERVO_ANGLE_SPEED;
+			  if (driveAnglePan > SERVO_MAX_DEG)
+			  {
+				  driveAnglePan = SERVO_MAX_DEG;
+			  }
+			  servo_writeDEG(SERVO_PAN,driveAnglePan);
+		  }
+		  if (x_pos > (IMG_CENTER_X + IMG_CENTER_ERROR))
+		  {
+			  driveAnglePan -= SERVO_ANGLE_SPEED;
+			  if (driveAnglePan < SERVO_MIN_DEG)
+			  {
+				  driveAnglePan = SERVO_MIN_DEG;
+			  }
+			  servo_writeDEG(SERVO_PAN,driveAnglePan);
+		  }
+		  // Y --> TILT *******************************************
+		  if (y_pos > (IMG_CENTER_Y + IMG_CENTER_ERROR))
+		  {
+			  driveAngleTilt+= SERVO_ANGLE_SPEED;
+			  if (driveAngleTilt > SERVO_TILT_MAX_DEG)
+			  {
+				  driveAngleTilt = SERVO_TILT_MAX_DEG;
+			  }
+			  servo_writeDEG(SERVO_TILT,driveAngleTilt);
+		  }
+		  if (y_pos < (IMG_CENTER_Y - IMG_CENTER_ERROR))
+		  {
+			  driveAngleTilt -= SERVO_ANGLE_SPEED;
+			  if (driveAngleTilt < SERVO_MIN_DEG)
+			  {
+				  driveAngleTilt = SERVO_MIN_DEG;
+			  }
+			  servo_writeDEG(SERVO_TILT,driveAngleTilt);
+		  }
 		  break;
 
 	  default:
@@ -175,7 +206,7 @@ void StartServoTask(void const * argument)
 		  break;
 
 	  }
-    osDelay(10);
+    osDelay(300);
   }
   /* USER CODE END StartServoTask */
 }

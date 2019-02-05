@@ -17,7 +17,8 @@ state_t currState;
 uint8_t currServoState;
 
 uint8_t str[MAX_STR_SIZE];
-uint8_t x_pos = 0, y_pos = 0;
+uint8_t x_pos = 100, y_pos = 100, yPosHold = 888, xPosHold = 888;
+uint8_t xVisuPos = 0, yVisuPos = 0;
 
 /* Helper for display text from UART */
 void dispText(const uint8_t * s)
@@ -56,10 +57,10 @@ void StartStatemaschineTask(void const * argument)
 	  // state machine
 	  switch(currState){
 	  case STATE_INITIAL:
-		  	  //TODO: Init something ...
 			  currState = STATE_WAITING;
 		  break;
 	  case STATE_WAITING:
+		  strcpy(&str,(const char *) "> Waiting ...");
 		  if (currMsg == MSG_FACE)
 		  {
 			  currState = STATE_FACE;
@@ -119,9 +120,6 @@ void StartStatemaschineTask(void const * argument)
 			  osMessagePut(txQueueHandle, (uint32_t) 0xAB, osWaitForever);
 			  currState = STATE_WAITING;
 		  }
-		  // display incoming string
-		  //dispText((uint8_t *)&str);
-
 		  break;
 	  default:
 		  Error_Handler();
@@ -138,6 +136,9 @@ void StartStatemaschineTask(void const * argument)
 void StartSTemWinTask(void const * argument)
 {
   /* USER CODE BEGIN StartSTemWinTask */
+	//buffer
+	uint8_t tiltBuf[20], panBuf[20], xBuf[20], yBuf[20];
+	// init
 	BSP_LCD_Init();
 	HAL_Delay(200);
 	GUI_Init();
@@ -148,6 +149,10 @@ void StartSTemWinTask(void const * argument)
 
 	// get item IDs
 	WM_HWIN hItemInfo = WM_GetDialogItem(hWin, (GUI_ID_USER + 0x07));
+	WM_HWIN hItemXVal = WM_GetDialogItem(hWin, (GUI_ID_USER + 0x06));
+	WM_HWIN hItemYVal = WM_GetDialogItem(hWin, (GUI_ID_USER + 0x05));
+	WM_HWIN hItemPan = WM_GetDialogItem(hWin,(GUI_ID_USER + 0x09));
+	WM_HWIN hItemTilt = WM_GetDialogItem(hWin,(GUI_ID_USER + 0x0A));
 
   /* Infinite loop */
 	for (;;)
@@ -155,9 +160,26 @@ void StartSTemWinTask(void const * argument)
 		// display string
 		TEXT_SetText(hItemInfo, (const char *)&str);
 
+		// calc visu point
+//		xVisuPos = x_pos + 25;
+//		yVisuPos = y_pos + 5;
+
+		// write PAN/TILT to LCD
+		sprintf((char *) tiltBuf,"TILT: %u DEG", (const uint8_t) driveAngleTilt);
+		sprintf((char *) panBuf,"PAN: %u DEG", (const uint8_t) driveAnglePan);
+		TEXT_SetText(hItemPan,(const char *) &panBuf);
+		TEXT_SetText(hItemTilt,(const char *) &tiltBuf);
+
+		// write xpos/ypos
+		sprintf((char *) xBuf,"X:%03u", x_pos);
+		sprintf((char *) yBuf,"Y:%03u", y_pos);
+		TEXT_SetText(hItemXVal,(const char *) &xBuf);
+		TEXT_SetText(hItemYVal,(const char *) &yBuf);
+
 		// force update graph
-		WM_HWIN hItemGraph = WM_GetDialogItem(hWin, (GUI_ID_USER + 0x09));
+		WM_HWIN hItemGraph = WM_GetDialogItem(hWin, (GUI_ID_USER + 0x08));
 		WM_Invalidate(hItemGraph);
+
 
 		// Update GUI
 		WM_Update(hWin);
@@ -225,8 +247,6 @@ void StartCommTask(void const * argument)
 			{
 				str[i-1] = '\0';
 				i = 0;
-				//WM_HWIN hItem = WM_GetDialogItem(hWin, (GUI_ID_USER + 0x07));
-				//TEXT_SetText(hItem, &str);
 			}
 			// overflow
 			if (i > MAX_STR_SIZE - 2)
@@ -253,13 +273,12 @@ void StartCommTask(void const * argument)
 				{
 					xPosStr[cpIdx] = str[idx+cpIdx];
 				}
-				WM_HWIN hItemXVal = WM_GetDialogItem(hWin, (GUI_ID_USER + 0x06));
-				TEXT_SetText(hItemXVal, &xPosStr);
 				// numeric position
-				x_pos = 0;
-				x_pos += (xPosStr[2] - 0x30) * 100;
-				x_pos += (xPosStr[3] - 0x30) * 10;
-				x_pos += (xPosStr[4] - 0x30) * 1;
+				xPosHold = ((xPosStr[2] - 0x30) * 100) + ((xPosStr[3] - 0x30) * 10) + (xPosStr[4] - 0x30);
+				if (xPosHold < IMG_SIZE_X)
+				{
+					x_pos = xPosHold;
+				}
 
 			}
 			// pos data: Y:000
@@ -269,13 +288,12 @@ void StartCommTask(void const * argument)
 				{
 					yPosStr[cpIdx] = str[idx + cpIdx];
 				}
-				WM_HWIN hItemXVal = WM_GetDialogItem(hWin,(GUI_ID_USER + 0x05));
-				TEXT_SetText(hItemXVal, &yPosStr);
 				// numeric position
-				y_pos = 0;
-				y_pos += (yPosStr[2] - 0x30) * 100;
-				y_pos += (yPosStr[3] - 0x30) * 10;
-				y_pos += (yPosStr[4] - 0x30) * 1;
+				yPosHold = ((yPosStr[2] - 0x30) * 100) + ((yPosStr[3] - 0x30) * 10) + (yPosStr[4] - 0x30);
+				if (yPosHold < IMG_SIZE_Y)
+				{
+					y_pos = yPosHold;
+				}
 
 			}
 		}
